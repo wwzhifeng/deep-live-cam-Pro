@@ -5,7 +5,8 @@
 </p>
 
 <p align="center">
-  <img src="media/demo.gif" alt="Demo" width="800">
+  <video src="https://github.com/wwzhifeng/deep-live-cam-Pro/releases/download/v2.0/demo.mp4" width="800" autoplay loop muted playsinline controls>
+  </video>
 </p>
 
 <p align="center">
