@@ -5,8 +5,7 @@
 </p>
 
 <p align="center">
-  <video src="https://raw.githubusercontent.com/wwzhifeng/deep-live-cam-Pro/main/media/demo.mp4" width="800" autoplay loop muted playsinline poster="https://raw.githubusercontent.com/wwzhifeng/deep-live-cam-Pro/main/media/demo.mp4">
-  </video>
+  <img src="media/demo.gif" alt="Demo" width="800">
 </p>
 
 <p align="center">
