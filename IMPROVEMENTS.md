@@ -78,7 +78,7 @@
 | ONNX Runtime | 1.26.0 |
 | CUDA | 12.9 |
 | cuDNN | 9.x |
-| 执行提供器 | TensorRT + CUDA |
+| 执行提供器 | CUDA |
 | 人脸检测 | insightface buffalo_l |
 | 人脸增强 | GFPGAN-1024 / GPEN-BFR-512 |
 
