@@ -31,7 +31,7 @@ Users must obtain consent before using a real person's face and clearly label an
 
 ### 方式二：从源码安装（进阶用户）
 
-**前置条件：** 系统已安装 CUDA Toolkit 12.x、cuDNN 9.x、TensorRT。
+**前置条件：** 系统已安装 CUDA Toolkit 12.x + cuDNN 9.x。
 
 ```bash
 git clone https://github.com/wwzhifeng/deep-live-cam-Pro.git
@@ -52,6 +52,9 @@ pip install -r requirements.txt
 - `GPEN-BFR-512.onnx` — [下载](https://github.com/harisreedhar/Face-Upscalers-ONNX/releases/download/GPEN-BFR/GPEN-BFR-512.onnx)（~272MB）
 
 ```bash
+# 注意：源码安装没有 wzf311 文件夹，不能双击 run-cuda.bat。
+# 手动激活 venv 后运行：
+venv\Scripts\activate
 python run.py --execution-provider cuda
 ```
 
