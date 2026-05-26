@@ -29,13 +29,20 @@ Users must obtain consent before using a real person's face and clearly label an
 > 已内置 Python 3.11 + CUDA 12.9 + 全部依赖 + 所有模型，无需安装任何东西。
 > 仅支持 NVIDIA 显卡，推荐 8GB 显存及以上（NVIDIA 显卡）。
 
-### 方式二：从源码安装
+### 方式二：从源码安装（进阶用户）
+
+**前置条件：** 系统已安装 CUDA Toolkit 12.x、cuDNN 9.x、TensorRT。
 
 ```bash
 git clone https://github.com/wwzhifeng/deep-live-cam-Pro.git
 cd deep-live-cam-Pro
 python -m venv venv
 venv\Scripts\activate
+
+# 先装 PyTorch（CUDA 12.9）
+pip install torch torchvision torchaudio --index-url https://download.pytorch.org/whl/cu129
+
+# 再装其余依赖
 pip install -r requirements.txt
 ```
 
