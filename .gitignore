@@ -9,6 +9,7 @@ __pycache__/
 tf_env/
 *.png
 *.mp4
+!media/*.mp4
 *.mkv
 
 .tmp/

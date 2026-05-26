@@ -5,7 +5,7 @@
 </p>
 
 <p align="center">
-  <img src="media/demo.gif" alt="Demo GIF" width="800">
+  <video src="media/demo.mp4" width="800" autoplay loop muted playsinline></video>
 </p>
 
 <p align="center">
