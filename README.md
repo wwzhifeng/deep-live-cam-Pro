@@ -26,7 +26,7 @@ Users must obtain consent before using a real person's face and clearly label an
 2. 双击 `run-cuda.bat`
 
 > 已内置 Python 3.11 + CUDA 12.9 + 全部依赖 + 所有模型，无需安装任何东西。
-> 仅支持 NVIDIA 显卡，推荐 RTX 3060 及以上。
+> 仅支持 NVIDIA 显卡，推荐 8GB 显存及以上（NVIDIA 显卡）。
 
 ### 方式二：从源码安装
 

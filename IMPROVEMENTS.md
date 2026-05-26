@@ -8,7 +8,7 @@
 2. 双击 `run-cuda.bat` 启动
 
 > 无需安装 Python、pip、CUDA 等依赖，已内置 wzf311 便携 Python 环境。
-> 仅支持 NVIDIA 显卡（CUDA 12.9），推荐 RTX 3060 / 4060 及以上。
+> 仅支持 NVIDIA 显卡（CUDA 12.9），推荐 8GB 显存及以上（NVIDIA 显卡）。
 
 ## 速度优化
 
