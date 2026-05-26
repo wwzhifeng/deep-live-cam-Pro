@@ -76,6 +76,10 @@ AGPL v3 — based on [Deep-Live-Cam](https://github.com/hacksider/deep-live-cam)
 - [hacksider](https://github.com/hacksider/deep-live-cam) — original project
 - [ffmpeg](https://ffmpeg.org/) — video processing
 
+## 交流群
+
+QQ 群：**773608333**（AI工具2群）
+
 ## Links
 
 - [https://wangzhifeng.vip/](https://wangzhifeng.vip/)
