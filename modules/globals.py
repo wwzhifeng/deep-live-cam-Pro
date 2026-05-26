@@ -29,7 +29,6 @@ many_faces: bool = False         # Process all detected faces with default sourc
 map_faces: bool = False          # Use source_target_map or simple_map for specific swaps
 poisson_blend: bool = False      # Enable Poisson Blending for smoother face swaps
 color_correction: bool = False   # Enable color correction (implementation specific)
-nsfw_filter: bool = False
 
 # Video Output Options
 video_encoder: str | None = None
@@ -56,6 +55,7 @@ fp_ui: Dict[str, bool] = {"face_enhancer": False, "face_enhancer_gpen256": False
 face_swapper_enabled: bool = True # General toggle for the swapper processor
 opacity: float = 1.0              # Blend factor for the swapped face (0.0-1.0)
 sharpness: float = 0.0            # Sharpness enhancement for swapped face (0.0-1.0+)
+edge_feather: float = 0.5         # Paste-back edge feather strength (0.0=sharp, 1.0=soft)
 
 # Mouth Mask Options
 mouth_mask: bool = False           # Enable mouth area masking/pasting

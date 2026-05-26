@@ -5,7 +5,6 @@ Public API kept stable for the rest of the codebase:
         Returned object has .mainloop() that core.py calls.
     update_status(text)
         Thread-safe; routed through Qt signal when called off-UI.
-    check_and_ignore_nsfw(target, destroy=None) -> bool
 """
 
 from __future__ import annotations
@@ -83,7 +82,7 @@ import json
 
 # ─── constants ────────────────────────────────────────────────────────────
 
-ROOT_HEIGHT = 820
+ROOT_HEIGHT = 700
 ROOT_WIDTH = 640
 
 PREVIEW_MAX_HEIGHT = 700
@@ -305,7 +304,6 @@ def save_switch_states():
         "map_faces": modules.globals.map_faces,
         "poisson_blend": modules.globals.poisson_blend,
         "color_correction": modules.globals.color_correction,
-        "nsfw_filter": modules.globals.nsfw_filter,
         "live_mirror": modules.globals.live_mirror,
         "live_resizable": modules.globals.live_resizable,
         "fp_ui": modules.globals.fp_ui,
@@ -313,6 +311,7 @@ def save_switch_states():
         "mouth_mask": modules.globals.mouth_mask,
         "show_mouth_mask_box": modules.globals.show_mouth_mask_box,
         "mouth_mask_size": modules.globals.mouth_mask_size,
+        "edge_feather": modules.globals.edge_feather,
     }
     try:
         with open("switch_states.json", "w") as f:
@@ -332,7 +331,6 @@ def load_switch_states():
         modules.globals.map_faces = state.get("map_faces", False)
         modules.globals.poisson_blend = state.get("poisson_blend", False)
         modules.globals.color_correction = state.get("color_correction", False)
-        modules.globals.nsfw_filter = state.get("nsfw_filter", False)
         modules.globals.live_mirror = state.get("live_mirror", False)
         modules.globals.live_resizable = state.get("live_resizable", False)
         modules.globals.fp_ui = state.get("fp_ui", {"face_enhancer": False})
@@ -342,6 +340,7 @@ def load_switch_states():
         modules.globals.mouth_mask_size = 0.0
         modules.globals.mouth_mask = False
         modules.globals.show_mouth_mask_box = False
+        modules.globals.edge_feather = state.get("edge_feather", 0.5)
     except FileNotFoundError:
         pass
     except (OSError, json.JSONDecodeError):
@@ -374,24 +373,6 @@ def update_status(text: str) -> None:
         # On UI thread — flush events so the user sees the update during
         # long synchronous start() runs.
         _APP.processEvents()
-
-
-def check_and_ignore_nsfw(target, destroy: Optional[Callable] = None) -> bool:
-    from numpy import ndarray
-    from modules.predicter import predict_frame, predict_image, predict_video
-
-    check_nsfw = None
-    if isinstance(target, str):
-        check_nsfw = predict_image if has_image_extension(target) else predict_video
-    elif isinstance(target, ndarray):
-        check_nsfw = predict_frame
-
-    if check_nsfw and check_nsfw(target):
-        if destroy:
-            destroy(to_quit=False)
-        update_status("Processing ignored!")
-        return True
-    return False
 
 
 # ─── camera enumeration (unchanged from tk version) ──────────────────────
@@ -431,7 +412,7 @@ def _make_image_drop(text: str, size: Tuple[int, int]) -> QLabel:
     label = QLabel(text)
     label.setObjectName("imageDrop")
     label.setAlignment(Qt.AlignmentFlag.AlignCenter)
-    label.setFixedSize(size[0], size[1])
+    label.setMinimumSize(size[0], size[1])
     label.setText(text)
     return label
 
@@ -467,9 +448,8 @@ class MainWindow(QMainWindow):
         self._start_cb = start_cb
         self._destroy_cb = destroy_cb
 
-        self.setWindowTitle(
-            f"{modules.metadata.name} {modules.metadata.version} {modules.metadata.edition}"
-        )
+        title = " ".join(p for p in [modules.metadata.name, modules.metadata.version, modules.metadata.edition] if p)
+        self.setWindowTitle(title)
         self.setMinimumSize(ROOT_WIDTH, ROOT_HEIGHT)
         self.resize(ROOT_WIDTH, ROOT_HEIGHT)
 
@@ -500,11 +480,11 @@ class MainWindow(QMainWindow):
         self._status_label.setAlignment(Qt.AlignmentFlag.AlignCenter)
         layout.addWidget(self._status_label)
 
-        footer = QLabel("Deep Live Cam")
+        footer = QLabel(_("Deep-Live-Cam Pro"))
         footer.setObjectName("linkLabel")
         footer.setAlignment(Qt.AlignmentFlag.AlignCenter)
         footer.setCursor(Qt.CursorShape.PointingHandCursor)
-        footer.mousePressEvent = lambda _e: webbrowser.open("https://deeplivecam.net")
+        footer.mousePressEvent = lambda _e: webbrowser.open("https://wangzhifeng.vip/")
         layout.addWidget(footer)
 
     # ── image row ────────────────────────────────────────────────────────
@@ -622,6 +602,21 @@ class MainWindow(QMainWindow):
             initial = "GPEN-512"
         elif modules.globals.fp_ui.get("face_enhancer_gpen256", False):
             initial = "GPEN-256"
+        if initial != "None":
+            _models = os.path.join(
+                os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__)))),
+                "models",
+            )
+            _model_files = {
+                "GFPGAN": "gfpgan-1024.onnx",
+                "GPEN-512": "GPEN-BFR-512.onnx",
+                "GPEN-256": "GPEN-BFR-256.onnx",
+            }
+            if not os.path.exists(os.path.join(_models, _model_files.get(initial, ""))):
+                initial = "None"
+                _update_tumbler("face_enhancer", False)
+                _update_tumbler("face_enhancer_gpen512", False)
+                _update_tumbler("face_enhancer_gpen256", False)
         self.cb_enhancer.setCurrentText(initial)
         self.cb_enhancer.currentTextChanged.connect(self._on_enhancer_change)
         self.cb_enhancer.setToolTip(_("Select a face enhancement model (None = no enhancement)"))
@@ -668,6 +663,13 @@ class MainWindow(QMainWindow):
             _("0 = use swapped mouth, 100 = expose original mouth to chin area")
         )
         grid.addWidget(self.s_mouth, 2, 1)
+
+        # Edge feather
+        grid.addWidget(QLabel(_("Edge Feather")), 3, 0)
+        self.s_edge_feather = slider(0.0, 1.0, modules.globals.edge_feather, 100,
+                                     self._on_edge_feather_change)
+        self.s_edge_feather.setToolTip(_("Soften the face paste-back edge (0 = sharp, 100 = soft)"))
+        grid.addWidget(self.s_edge_feather, 3, 1)
         return card
 
     # ── action row ───────────────────────────────────────────────────────
@@ -860,6 +862,9 @@ class MainWindow(QMainWindow):
     def _on_mouth_mask_released(self) -> None:
         modules.globals.show_mouth_mask_box = False
 
+    def _on_edge_feather_change(self, value: float) -> None:
+        modules.globals.edge_feather = value
+
     def _on_start(self) -> None:
         if _MAPPER is not None and _MAPPER.isVisible():
             update_status("Please complete pop-up or close it.")
@@ -983,8 +988,6 @@ class PreviewWindow(QWidget):
             return
         update_status("Processing...")
         temp_frame = get_video_frame(modules.globals.target_path, frame_number)
-        if modules.globals.nsfw_filter and check_and_ignore_nsfw(temp_frame):
-            return
         from modules.processors.frame.core import get_frame_processors_modules as _gfpm
         for fp in _gfpm(modules.globals.frame_processors):
             temp_frame = fp.process_frame(
@@ -1173,7 +1176,7 @@ class _ProcessingWorker(QThread):
 class WebcamPreviewWindow(QWidget):
     def __init__(self, camera_index: int):
         super().__init__()
-        self.setWindowTitle("Live Preview")
+        self.setWindowTitle(_("Live Preview"))
         self.resize(PREVIEW_DEFAULT_WIDTH, PREVIEW_DEFAULT_HEIGHT)
         layout = QVBoxLayout(self)
         layout.setContentsMargins(0, 0, 0, 0)

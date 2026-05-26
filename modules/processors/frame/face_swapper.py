@@ -198,7 +198,12 @@ def pre_check() -> bool:
         logging.error(f"Failed to create directory {download_directory_path} due to permission error: {e}")
         return False
     
-    # Use the direct download URL from Hugging Face (FP32 model for broad GPU compatibility)
+    # Skip download if either model variant already exists
+    fp16_path = os.path.join(download_directory_path, "inswapper_128_fp16.onnx")
+    fp32_path = os.path.join(download_directory_path, "inswapper_128.onnx")
+    if os.path.exists(fp16_path) or os.path.exists(fp32_path):
+        return True
+
     conditional_download(
         download_directory_path,
         [
@@ -234,7 +239,7 @@ def get_face_swapper() -> Any:
             # older GPUs (e.g. GTX 16xx) where FP16 can produce NaN.
             fp32_path = os.path.join(models_dir, "inswapper_128.onnx")
             fp16_path = os.path.join(models_dir, "inswapper_128_fp16.onnx")
-            use_fp16 = _HAS_TORCH_CUDA and os.path.exists(fp16_path)
+            use_fp16 = _HAS_CUDA and os.path.exists(fp16_path)
             if use_fp16:
                 model_path = fp16_path
             elif os.path.exists(fp32_path):
@@ -276,7 +281,7 @@ def get_face_swapper() -> Any:
                     providers=providers_config,
                 )
                 # Set up CUDA graph session for faster inference
-                if _HAS_TORCH_CUDA and any(
+                if _HAS_CUDA and any(
                     p == "CUDAExecutionProvider" or
                     (isinstance(p, tuple) and p[0] == "CUDAExecutionProvider")
                     for p in providers_config
@@ -290,18 +295,17 @@ def get_face_swapper() -> Any:
     return FACE_SWAPPER
 
 
-_HAS_TORCH_CUDA = False
+_HAS_CUDA = False
 try:
-    import torch
-    if torch.cuda.is_available():
-        _HAS_TORCH_CUDA = True
-except ImportError:
+    import onnxruntime
+    _HAS_CUDA = "CUDAExecutionProvider" in onnxruntime.get_available_providers()
+except Exception:
     pass
 
-# Cache for paste-back
+# Cache for paste-back (keyed by size + feather_strength)
 _paste_cache = {
-    'soft_alpha': None,  # feathered alpha mask in aligned-face space
-    'alpha_size': 0,
+    'soft_alpha': None,
+    'alpha_key': None,
 }
 
 
@@ -315,19 +319,22 @@ def _get_soft_alpha(size: int) -> np.ndarray:
     per-frame gives a visually equivalent feather at O(crop_area) cost —
     the feather radius scales naturally with the affine transform.
     """
-    if _paste_cache['alpha_size'] != size:
-        # Elliptical (not square) template — matches the gumroad edition's
-        # _create_elliptical_mask. A full/eroded square leaves the aligned
-        # crop's corners near-opaque, so the swapped square's straight edges
-        # show as a visible box on the face. An ellipse (axes 0.44*size) zeroes
-        # the corners and the heavy blur feathers smoothly into the original.
+    feather = max(0.0, min(1.0, modules.globals.edge_feather))
+    key = (size, round(feather, 2))
+    if _paste_cache.get('alpha_key') != key:
+        # Ellipse inset from the aligned-face border so the feather blur has
+        # room to expand on all sides.  axes: 0.38 * size leaves ~19 % margin
+        # on each side at 128 px, giving the GaussianBlur space to spread.
+        # k: 5 (sharp) → 91 (very soft), s: 2 → 40
+        k = int(5 + feather * 86) | 1
+        s = 2 + feather * 38
         center = (size // 2, size // 2)
-        axes = (int(size * 0.44), int(size * 0.44))
+        axes = (int(size * 0.38), int(size * 0.38))
         mask = np.zeros((size, size), dtype=np.uint8)
         cv2.ellipse(mask, center, axes, 0, 0, 360, 255, -1)
-        mask = cv2.GaussianBlur(mask, (31, 31), 12)
-        _paste_cache['soft_alpha'] = mask  # uint8 [0, 255] — blended via cv2 SIMD ops
-        _paste_cache['alpha_size'] = size
+        mask = cv2.GaussianBlur(mask, (k, k), s)
+        _paste_cache['soft_alpha'] = mask
+        _paste_cache['alpha_key'] = key
     return _paste_cache['soft_alpha']
 
 # CUDA graph swap session cache
@@ -429,6 +436,10 @@ def _cuda_graph_swap_inference(blob: np.ndarray, latent: np.ndarray) -> np.ndarr
     """Run swap model via CUDA graph replay — minimal CPU overhead."""
     cg = _cuda_graph_session
     with _cuda_graph_lock:
+        if not blob.flags['C_CONTIGUOUS']:
+            blob = np.ascontiguousarray(blob)
+        if not latent.flags['C_CONTIGUOUS']:
+            latent = np.ascontiguousarray(latent)
         cg['ort_input'].update_inplace(blob)
         cg['ort_latent'].update_inplace(latent)
         cg['session'].run_with_iobinding(cg['io_binding'])
@@ -479,21 +490,24 @@ def _fast_paste_back(target_img: Frame, bgr_fake: np.ndarray, aimg: np.ndarray, 
 
     target_crop = target_img[y1p:y2p, x1p:x2p]
 
-    if _HAS_TORCH_CUDA:
-        # Scale alpha to [0, 1] on device — cheaper to upload uint8 than float.
-        mask_t = torch.from_numpy(alpha_crop).cuda().float().mul_(1.0 / 255.0).unsqueeze(2)
-        fake_t = torch.from_numpy(bgr_fake_crop).float().cuda()
-        tgt_t = torch.from_numpy(target_crop).float().cuda()
-        blended = (mask_t * fake_t + (1.0 - mask_t) * tgt_t).to(torch.uint8).cpu().numpy()
-        target_img[y1p:y2p, x1p:x2p] = blended
-    else:
-        # Fused uint8 blend via cv2 SIMD — no float32 round-trip.
-        # Measured ~7-8× faster than the old numpy float32 path on a 1000×1000 crop.
-        alpha_3c = cv2.merge([alpha_crop, alpha_crop, alpha_crop])
-        inv_alpha = 255 - alpha_3c
-        a_fake = cv2.multiply(bgr_fake_crop, alpha_3c, scale=1.0 / 255.0)
-        a_tgt = cv2.multiply(target_crop, inv_alpha, scale=1.0 / 255.0)
-        target_img[y1p:y2p, x1p:x2p] = cv2.add(a_fake, a_tgt)
+    try:
+        import torch
+        if torch.cuda.is_available():
+            mask_t = torch.from_numpy(alpha_crop).cuda().float().mul_(1.0 / 255.0).unsqueeze(2)
+            fake_t = torch.from_numpy(bgr_fake_crop).float().cuda()
+            tgt_t = torch.from_numpy(target_crop).float().cuda()
+            blended = (mask_t * fake_t + (1.0 - mask_t) * tgt_t).to(torch.uint8).cpu().numpy()
+            target_img[y1p:y2p, x1p:x2p] = blended
+            return target_img
+    except ImportError:
+        pass
+    # Fused uint8 blend via cv2 SIMD — no float32 round-trip.
+    # Measured ~7-8× faster than the old numpy float32 path on a 1000×1000 crop.
+    alpha_3c = cv2.merge([alpha_crop, alpha_crop, alpha_crop])
+    inv_alpha = 255 - alpha_3c
+    a_fake = cv2.multiply(bgr_fake_crop, alpha_3c, scale=1.0 / 255.0)
+    a_tgt = cv2.multiply(target_crop, inv_alpha, scale=1.0 / 255.0)
+    target_img[y1p:y2p, x1p:x2p] = cv2.add(a_fake, a_tgt)
 
     return target_img
 

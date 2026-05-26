@@ -16,7 +16,7 @@ from pathlib import Path
 FACE_ANALYSER = None
 FACE_ANALYSER_LOCK = threading.Lock()
 
-DET_SIZE = (640, 640)
+DET_SIZE = (480, 480)
 
 
 def get_face_analyser() -> Any:
@@ -31,8 +31,13 @@ def get_face_analyser() -> Any:
                     build_provider_config,
                 )
                 providers = build_provider_config()
+                root_dir = os.path.join(
+                    os.path.dirname(os.path.dirname(os.path.abspath(__file__))),
+                    "models", "insightface",
+                )
                 FACE_ANALYSER = insightface.app.FaceAnalysis(
                     name='buffalo_l',
+                    root=root_dir,
                     providers=providers,
                     allowed_modules=['detection', 'recognition', 'landmark_2d_106']
                 )

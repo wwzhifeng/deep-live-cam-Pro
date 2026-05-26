@@ -3,8 +3,6 @@ import sys
 # single thread doubles cuda performance - needs to be set before torch import
 if any(arg.startswith('--execution-provider') for arg in sys.argv):
     os.environ['OMP_NUM_THREADS'] = '6'
-# reduce tensorflow log level
-os.environ['TF_CPP_MIN_LOG_LEVEL'] = '2'
 import warnings
 from typing import List
 import platform
@@ -17,11 +15,6 @@ try:
 except ImportError:
     HAS_TORCH = False
 import onnxruntime
-try:
-    import tensorflow
-    HAS_TENSORFLOW = True
-except ImportError:
-    HAS_TENSORFLOW = False
 
 import modules.globals
 import modules.metadata
@@ -48,7 +41,6 @@ def parse_args() -> None:
     program.add_argument('--keep-audio', help='keep original audio', dest='keep_audio', action='store_true', default=True)
     program.add_argument('--keep-frames', help='keep temporary frames', dest='keep_frames', action='store_true', default=False)
     program.add_argument('--many-faces', help='process every face', dest='many_faces', action='store_true', default=False)
-    program.add_argument('--nsfw-filter', help='filter the NSFW image or video', dest='nsfw_filter', action='store_true', default=False)
     program.add_argument('--map-faces', help='map source target faces', dest='map_faces', action='store_true', default=False)
     program.add_argument('--mouth-mask', help='mask the mouth region', dest='mouth_mask', action='store_true', default=False)
     program.add_argument('--video-encoder', help='adjust output video encoder', dest='video_encoder', default='libx264', choices=['libx264', 'libx265', 'libvpx-vp9'])
@@ -79,7 +71,6 @@ def parse_args() -> None:
     modules.globals.keep_frames = args.keep_frames
     modules.globals.many_faces = args.many_faces
     modules.globals.mouth_mask = args.mouth_mask
-    modules.globals.nsfw_filter = args.nsfw_filter
     modules.globals.map_faces = args.map_faces
     modules.globals.video_encoder = args.video_encoder
     modules.globals.video_quality = args.video_quality
@@ -163,11 +154,6 @@ def suggest_execution_threads() -> int:
 
 
 def limit_resources() -> None:
-    # prevent tensorflow memory leak
-    if HAS_TENSORFLOW:
-        gpus = tensorflow.config.experimental.list_physical_devices('GPU')
-        for gpu in gpus:
-            tensorflow.config.experimental.set_memory_growth(gpu, True)
     # limit memory usage
     if modules.globals.max_memory:
         memory = modules.globals.max_memory * 1024 ** 3
@@ -213,8 +199,6 @@ def start() -> None:
     
     # process image to image
     if has_image_extension(modules.globals.target_path):
-        if modules.globals.nsfw_filter and ui.check_and_ignore_nsfw(modules.globals.target_path, destroy):
-            return
         try:
             shutil.copy2(modules.globals.target_path, modules.globals.output_path)
         except Exception as e:
@@ -231,8 +215,6 @@ def start() -> None:
         return
     
     # process image to videos
-    if modules.globals.nsfw_filter and ui.check_and_ignore_nsfw(modules.globals.target_path, destroy):
-        return
 
     # Detect FPS early (needed by both pipelines)
     if modules.globals.keep_fps:

@@ -22,6 +22,8 @@ FACE_ENHANCER = None
 THREAD_SEMAPHORE = threading.Semaphore()
 THREAD_LOCK = threading.Lock()
 NAME = "DLC.FACE-ENHANCER"
+MODEL_URL = "https://huggingface.co/hacksider/deep-live-cam/resolve/main/gfpgan-1024.onnx"
+MODEL_FILE = "gfpgan-1024.onnx"
 
 abs_dir = os.path.dirname(os.path.abspath(__file__))
 models_dir = os.path.join(
@@ -43,15 +45,12 @@ FFHQ_TEMPLATE_512 = np.array(
 
 
 def pre_check() -> bool:
-    model_path = os.path.join(models_dir, "gfpgan-1024.onnx")
+    model_path = os.path.join(models_dir, MODEL_FILE)
     if not os.path.exists(model_path):
-        update_status(
-            f"GFPGAN ONNX model not found at {model_path}. "
-            "Please place gfpgan-1024.onnx in the models folder.",
-            NAME,
-        )
-        return False
-    return True
+        update_status(f"Downloading {MODEL_FILE}...", NAME)
+        from modules.utilities import conditional_download
+        conditional_download(models_dir, [MODEL_URL])
+    return os.path.exists(model_path)
 
 
 def pre_start() -> bool:
@@ -72,12 +71,16 @@ def get_face_enhancer() -> onnxruntime.InferenceSession:
 
     with THREAD_LOCK:
         if FACE_ENHANCER is None:
-            model_path = os.path.join(models_dir, "gfpgan-1024.onnx")
+            model_path = os.path.join(models_dir, MODEL_FILE)
 
             if not os.path.exists(model_path):
-                raise FileNotFoundError(
-                    f"{NAME}: Model not found at {model_path}"
-                )
+                update_status(f"Downloading {MODEL_FILE}...", NAME)
+                from modules.utilities import conditional_download
+                conditional_download(models_dir, [MODEL_URL])
+            if not os.path.exists(model_path):
+                print(f"{NAME}: Model not found at {model_path}, face enhancement disabled.")
+                FACE_ENHANCER = False
+                return None
 
             try:
                 from modules.processors.frame._onnx_enhancer import (
@@ -104,15 +107,11 @@ def get_face_enhancer() -> onnxruntime.InferenceSession:
 
             except Exception as e:
                 print(f"{NAME}: Error loading GFPGAN ONNX model: {e}")
-                FACE_ENHANCER = None
-                raise RuntimeError(
-                    f"{NAME}: Failed to load GFPGAN ONNX model: {e}"
-                )
+                FACE_ENHANCER = False
+                return None
 
-    if FACE_ENHANCER is None:
-        raise RuntimeError(
-            f"{NAME}: Failed to initialize GFPGAN ONNX session. Check logs."
-        )
+    if FACE_ENHANCER is None or FACE_ENHANCER is False:
+        return None
 
     return FACE_ENHANCER
 
@@ -179,9 +178,11 @@ def _paste_back(
     inv_matrix = cv2.invertAffineTransform(affine_matrix)
 
     # Build or reuse cached feathered mask (uint8 — blended via cv2 SIMD ops)
-    if _enhancer_cache['mask_size'] != output_size:
+    feather = max(0.0, min(1.0, modules.globals.edge_feather))
+    mask_key = (output_size, round(feather, 2))
+    if _enhancer_cache.get('mask_key') != mask_key:
         face_mask_f = np.ones((output_size, output_size), dtype=np.float32)
-        border = max(1, int(output_size * 0.05))
+        border = max(1, int(output_size * (0.02 + feather * 0.18)))
         ramp_up = np.linspace(0.0, 1.0, border, dtype=np.float32)
         ramp_down = np.linspace(1.0, 0.0, border, dtype=np.float32)
         face_mask_f[:border, :] *= ramp_up[:, None]
@@ -189,7 +190,7 @@ def _paste_back(
         face_mask_f[:, :border] *= ramp_up[None, :]
         face_mask_f[:, -border:] *= ramp_down[None, :]
         _enhancer_cache['mask'] = (face_mask_f * 255.0).astype(np.uint8)
-        _enhancer_cache['mask_size'] = output_size
+        _enhancer_cache['mask_key'] = mask_key
 
     # Compute tight bbox from affine corners (avoids full-frame warpAffine scan)
     corners = np.array([[0, 0], [output_size, 0],
@@ -294,6 +295,8 @@ def enhance_face(temp_frame: Frame, detected_faces=None) -> Frame:
             _ENH_INTERVAL frames, reusing the cached result otherwise.
     """
     session = get_face_enhancer()
+    if session is None:
+        return temp_frame
 
     # Determine model input resolution from the session metadata
     input_info = session.get_inputs()[0]

@@ -39,9 +39,8 @@ models_dir = os.path.join(
 def pre_check() -> bool:
     model_path = os.path.join(models_dir, MODEL_FILE)
     if not os.path.exists(model_path):
-        update_status(f"Downloading {MODEL_FILE}...", NAME)
-        from modules.utilities import conditional_download
-        conditional_download(models_dir, [MODEL_URL])
+        print(f"{NAME}: Model not found at {model_path}, enhancer disabled.")
+        return False
     return True
 
 
@@ -58,20 +57,23 @@ def get_enhancer() -> Any:
         if ENHANCER is None:
             model_path = os.path.join(models_dir, MODEL_FILE)
             if not os.path.exists(model_path):
-                from modules.utilities import conditional_download
-                conditional_download(models_dir, [MODEL_URL])
-            if not os.path.exists(model_path):
-                raise FileNotFoundError(f"Model file not found: {model_path}")
+                print(f"{NAME}: Model not found at {model_path}, enhancer disabled.")
+                ENHANCER = False
+                return None
             print(f"{NAME}: Loading ONNX model from {model_path}")
             ENHANCER = create_onnx_session(model_path)
             warmup_session(ENHANCER)
             print(f"{NAME}: Model loaded successfully.")
+    if ENHANCER is None or ENHANCER is False:
+        return None
     return ENHANCER
 
 
 def enhance_face(temp_frame: Frame, face: Face) -> Frame:
     try:
         session = get_enhancer()
+        if session is None:
+            return temp_frame
     except Exception as e:
         print(f"{NAME}: {e}")
         return temp_frame
