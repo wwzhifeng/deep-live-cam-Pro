@@ -8,6 +8,10 @@
   <img src="media/demo.gif" alt="Demo GIF" width="800">
 </p>
 
+<p align="center">
+  <a href="https://pan.quark.cn/s/e41399439d45"><b>⬇️ 一键整合包下载</b></a>
+</p>
+
 ##  Disclaimer
 
 This software is designed for the AI-generated media industry — assisting artists, content creators, and character animation.
