@@ -4,8 +4,8 @@
 
 ## 安装
 
-1. 下载完整压缩包，解压到任意目录
-2. 双击 `run-cuda.bat` 启动
+1. [⬇️ 一键整合包下载](https://pan.quark.cn/s/e41399439d45) 完整压缩包，解压到任意目录
+2. 双击 `启动器.bat` 启动
 
 > 无需安装 Python、pip、CUDA 等依赖，已内置 wzf311 便携 Python 环境。
 > 仅支持 NVIDIA 显卡（CUDA 12.9），推荐 8GB 显存及以上（NVIDIA 显卡）。

@@ -23,8 +23,8 @@ Users must obtain consent before using a real person's face and clearly label an
 
 ### 方式一：便携版（推荐）
 
-1. 下载完整压缩包并解压
-2. 双击 `run-cuda.bat`
+1. [⬇️ 一键整合包下载]() 完整压缩包并解压
+2. 双击 `启动器.bat`
 
 > 已内置 Python 3.11 + CUDA 12.9 + 全部依赖 + 所有模型，无需安装任何东西。
 > 仅支持 NVIDIA 显卡，推荐 8GB 显存及以上（NVIDIA 显卡）。
@@ -52,7 +52,7 @@ pip install -r requirements.txt
 - `GPEN-BFR-512.onnx` — [下载](https://github.com/harisreedhar/Face-Upscalers-ONNX/releases/download/GPEN-BFR/GPEN-BFR-512.onnx)（~272MB）
 
 ```bash
-# 注意：源码安装没有 wzf311 文件夹，不能双击 run-cuda.bat。
+# 注意：源码安装没有 wzf311 文件夹，不能双击 启动器.bat。
 # 手动激活 venv 后运行：
 venv\Scripts\activate
 python run.py --execution-provider cuda
