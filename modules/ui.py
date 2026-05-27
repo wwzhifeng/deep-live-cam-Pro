@@ -13,7 +13,7 @@ import os
 import platform
 import queue
 import sys
-import tempfile
+
 import threading
 import time
 import webbrowser
@@ -787,7 +787,9 @@ class MainWindow(QMainWindow):
                 timeout=10,
             )
             response.raise_for_status()
-            temp_path = os.path.join(tempfile.gettempdir(), "deep_live_cam_random_face.jpg")
+            _internal_temp = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "_internal", "temp")
+            os.makedirs(_internal_temp, exist_ok=True)
+            temp_path = os.path.join(_internal_temp, "random_face.jpg")
             with open(temp_path, "wb") as f:
                 f.write(response.content)
             modules.globals.source_path = temp_path
@@ -1074,7 +1076,9 @@ class _ProcessingWorker(QThread):
                     and modules.globals.source_path != last_source_path
                 ):
                     last_source_path = modules.globals.source_path
-                    source_image = get_one_face(cv2.imread(modules.globals.source_path))
+                    source_frame = cv2.imread(modules.globals.source_path)
+                    if source_frame is not None:
+                        source_image = get_one_face(source_frame)
 
                 det_count += 1
                 if det_count % det_interval == 0:
