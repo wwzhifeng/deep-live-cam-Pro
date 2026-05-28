@@ -1,12 +1,11 @@
-# Deep-Live-Cam Pro 完整依赖
-# ==============================
-# 安装步骤：
-#   1. pip install torch==2.9.0 --index-url https://download.pytorch.org/whl/cu129
+# Deep-Live-Cam Pro dependencies
+# Install steps:
+#   1. pip install torch --index-url https://download.pytorch.org/whl/cu129
 #   2. pip install -r requirements.txt
-# ==============================
 
 numpy==1.26.4
 opencv-python==4.11.0.86
+opencv-python-headless==4.11.0.86
 cv2_enumerate_cameras==1.1.15
 onnx==1.21.0
 onnxruntime-gpu==1.26.0

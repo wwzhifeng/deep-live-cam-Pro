@@ -31,20 +31,22 @@ Users must obtain consent before using a real person's face and clearly label an
 
 ### 方式二：从源码安装（进阶用户）
 
-**前置条件：** 系统已安装 CUDA Toolkit 12.x + cuDNN 9.x。
+**前置条件：** Python 3.11 + ffmpeg（系统 PATH 中可用）。
 
 ```bash
 git clone https://github.com/wwzhifeng/deep-live-cam-Pro.git
 cd deep-live-cam-Pro
-python -m venv venv
+python3.11 -m venv venv
 venv\Scripts\activate
 
 # 先装 PyTorch（CUDA 12.9）
-pip install torch torchvision torchaudio --index-url https://download.pytorch.org/whl/cu129
+pip install torch --index-url https://download.pytorch.org/whl/cu129
 
 # 再装其余依赖
 pip install -r requirements.txt
 ```
+
+> CUDA/cuDNN 无需手动安装，PyTorch 和 onnxruntime-gpu 已通过 pip 包内置。
 
 将以下模型放入 `models/` 目录（共 ~1.1GB）：
 - `inswapper_128.onnx` — [下载](https://huggingface.co/hacksider/deep-live-cam/resolve/main/inswapper_128.onnx)（~529MB）
